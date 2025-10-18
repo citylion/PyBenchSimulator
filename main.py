@@ -1,14 +1,8 @@
-file_path = "c17.bench"
+from benchlib import *
+file_path = "hw1.bench"
 
 
 benchLines = []
-
-nodeInputs = set()
-nodeOutputs =  set()
-gate_type_set = {"NOT", "AND", "OR", "NOR", "XOR", "XNOR", "NAND"}
-#####
-nodeGate_TypeMap = {}
-nodeGate_InputMap = {}
 
 try:
     with open(file_path, 'r') as file:
@@ -16,126 +10,109 @@ try:
         for line in file:
             benchLines.append(line.strip())
             i=i+1
-
 except FileNotFoundError:
     print("Error: No such file \"" + file_path+ "\" present in this script's directory!")
 except Exception as e:
     print("Error: Exception as follows, " + str(e))
 
-i=0
-for line in benchLines:
-    i=i+1
-    if "INPUT" in line:
-        post1 = line.find("(")
-        post2 = line.find(")")
-        if post2 < post1 or post2 == post1+1:
-            raise RuntimeError("Error: Malformed bench file, poor syntax involving '(' at line " + i)
-        varName = line[post1+1:post2]
-        nodeInputs.add(varName.strip())
-    elif "OUTPUT" in line:
-        post1 = line.find("(")
-        post2 = line.find(")")
-        if post2 < post1 or post2 == post1+1:
-            raise RuntimeError("Error: Malformed bench file, poor syntax involving '(' at line " + i)
-        varName = line[post1+1:post2]
-        nodeOutputs.add(varName.strip())
-    elif "=" in line:
-        post2 = line.find("=")
-        varName = line[:post2]
-        varName = varName.strip()
 
-        gateType = "NONE"
+b = Bench(benchLines)
 
-        for type in gate_type_set:
-            if type in line:
-                gateType = type
 
-        if gateType == "NONE":
-            raise RuntimeError("Error: Gate is not of a valid type at line " + i)
-
-        post1 = line.find("(")
-        post2 = line.find(")")
-        if post2 < post1 or post2 == post1 + 1:
-            raise RuntimeError("Error: Malformed bench file, poor syntax involving '(' at line " + i)
-        varsContained = line[post1 + 1:post2]
-        varsContained = varsContained.split(",")
-        varsContained = [var.strip() for var in varsContained]  # Strip each element individually
-        nodeGate_InputMap[varName] = varsContained
-        nodeGate_TypeMap[varName] = gateType.strip()
-
-#Build output list:
-outputNodesStr = "Output Nodes: ["
-i=0
-for name in nodeOutputs:
-    outputNodesStr = outputNodesStr + name
-    if(i != len(nodeOutputs)-1):
-        outputNodesStr = outputNodesStr + ", "
-    else:
-        outputNodesStr = outputNodesStr + "]"
-    i=i+1
-
-#Build input list:
-inputNodeStr = "Input Nodes : ["
-i=0
-for name in nodeInputs:
-    inputNodeStr = inputNodeStr + name
-    if(i != len(nodeInputs)-1):
-        inputNodeStr = inputNodeStr + ", "
-    else:
-        inputNodeStr = inputNodeStr + "]"
-    i = i + 1
-print("----------------------------")
-print(inputNodeStr)
-print(outputNodesStr)
-print("----------------------------")
-print("Node description as follows:")
-for name in nodeGate_TypeMap:
-    desc = ""
-    type = nodeGate_TypeMap.get(name)
-    inputStr = str(nodeGate_InputMap.get(name))
-    inputStr = inputStr.replace("'","").replace("\"","").replace(" ","").replace(",",", ")
-    desc = desc + name
-    if len(name) == 1:
-        desc = desc + " "
-    desc = desc + ": " + type
-    if type == "OR":
-        desc = desc + " "
-    desc = desc + " of " + inputStr
-    print(desc)
-print("----------------------------")
+#2
+b.printFaultList()
 
 
 
-levels: dict[str, int] = {}
+'''
+#3i
+tv = [1,1,0]
+b.printResult(tv)
+'''
 
-for varName in nodeInputs:
-    levels[varName] = 0
+'''
+#3ii
+tv = [1,0,1]
+b.printResult(tv)
+'''
 
-while True: # could be optimized later..
-    progress=False
-    for varName in nodeGate_InputMap:
-        if varName in levels:
-            continue
-        l = -1
-        for inputVar in nodeGate_InputMap[varName]:
-            if inputVar not in levels or levels[inputVar] is None:
-                l = -1
-                break
-            else:
-                l = max(l, levels[inputVar])
-        if l != -1:
-            levels[varName] = l+1
-            progress = True
-    if progress is False:
-        break
+'''
+#4
+print("Simulation of " + file_path)
+print("")
+tv = hexToBinList("00050007")
 
-print("Node levels:")
-print("Node | Level")
+b.printResultWithIntermediates(tv)
+'''
 
-for x in levels:
-    addSpace = 4 - len(x)
-    if addSpace < 0:
-        addSpace = 0
-    print(str(x) + " "*addSpace + ": " + str(levels[x]))
 
-print("----------------------------")
+'''
+#5i
+#fault sim
+print("Fault simulation of " + file_path)
+tv = [1,1,0] #cba
+
+b.addGateOutputFault("y",True)
+b.printResult(tv)
+'''
+
+'''
+#5ii
+#fault sim
+print("Fault simulation of " + file_path)
+tv = [1,1,0] #cba
+
+b.addGateOutputFault("y",False)
+b.printResult(tv)
+'''
+
+'''
+#6i
+#fault sim
+print("Fault simulation of " + file_path)
+
+tv = [0,0,0,0,0]
+
+b.addGateInputFault("22","10",False)
+
+b.printResult(tv)
+'''
+
+'''
+#6ii
+#fault sim
+print("Fault simulation of " + file_path)
+
+tv = [1,1,1,1,1]
+
+b.addGateInputFault("22","10",False)
+
+b.printResult(tv)
+'''
+
+'''
+#7i
+tv = [1,1,0]
+b.testAllFaults(tv)
+'''
+
+'''
+#7ii
+tv = [1,0,1]
+b.testAllFaults(tv)
+'''
+
+
+'''
+#8.i
+print("Fault simulation of " + file_path)
+tv = hexToBinList("000ABCD1234")
+b.testAllFaults(tv)
+'''
+
+'''
+#8.ii
+for i in range(11):
+    tv = b.randomizeInputTV()
+    b.faultCatchAnalysis(tv)
+'''
