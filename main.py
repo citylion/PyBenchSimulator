@@ -1,5 +1,5 @@
 from benchlib import *
-file_path = "hw1.bench"
+file_path = "c7552.bench"
 
 
 benchLines = []
@@ -17,11 +17,13 @@ except Exception as e:
 
 
 b = Bench(benchLines)
+b.printControlabities()
 
 
+'''
 #2
 b.printFaultList()
-
+'''
 
 
 '''
@@ -116,3 +118,4 @@ for i in range(11):
     tv = b.randomizeInputTV()
     b.faultCatchAnalysis(tv)
 '''
+

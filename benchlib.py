@@ -13,10 +13,8 @@ class Gate(Enum):
     BUFF = "BUFF"
     NONE = "NONE"  # should not happen
 
-
 line_limit = 150
 line_i = 0
-
 
 def limitedPrint(str):
     global line_i
@@ -69,6 +67,71 @@ def evalGate(g, list):
         return list[0]
     assert g != Gate.NONE
 
+
+INTEGER_MAX = 2147483648
+
+
+# given the controllability of the input nodes, and this gate,
+# return the controllability value of this gate
+def evalControllability(g, list):
+    for i in range(len(list)):
+        assert len(list[i]) == 2
+        assert isinstance(list[i][0], int)
+        assert isinstance(list[i][1], int)
+
+    inputC0arr = [INTEGER_MAX] * len(list)
+    for i in range(len(list)):
+        inputC0arr[i] = list[i][0]
+    inputC1arr = [INTEGER_MAX] * len(list)
+    for i in range(len(list)):
+        inputC1arr[i] = list[i][1]
+
+    c0 = INTEGER_MAX
+    c1 = INTEGER_MAX
+
+    if g == Gate.BUFF:
+        assert len(list) == 1
+        c0 = list[0][0] + 1
+        c1 = list[0][1] + 1
+    elif g == Gate.AND:
+        c0 = min(inputC0arr) + 1
+        c1 = sum(inputC1arr) + 1
+    elif g == Gate.OR:
+        c0 = sum(inputC0arr) + 1
+        c1 = min(inputC1arr) + 1
+    elif g == Gate.XOR:
+        # todo check if this XOR controllability works for 3+ input
+        c0 = min(sum(inputC0arr), sum(inputC1arr)) + 1
+        arr1 = [INTEGER_MAX] * len(list)
+        arr2 = [INTEGER_MAX] * len(list)
+        for i in range(1, len(list) + 1):
+            idx = i - 1
+            if i % 2 == 0:
+                arr1[idx] = inputC0arr[idx]
+                arr2[idx] = inputC1arr[idx]
+            else:
+                arr1[idx] = inputC1arr[idx]
+                arr2[idx] = inputC0arr[idx]
+        c1 = min(sum(arr1), sum(arr2)) + 1
+    elif g == Gate.NOT:
+        rlist = evalControllability(Gate.BUFF, list)
+        rlist.reverse()
+        return rlist
+    elif g == Gate.NAND:
+        rlist = evalControllability(Gate.AND, list)
+        rlist.reverse()
+        return rlist
+    elif g == Gate.NOR:
+        rlist = evalControllability(Gate.OR, list)
+        rlist.reverse()
+        return rlist
+    elif g == Gate.XNOR:
+        rlist = evalControllability(Gate.XOR, list)
+        rlist.reverse()
+        return rlist
+    rtn = [c0, c1]
+    assert rtn is not None
+    return rtn
 
 def hexToBinList(hex):
     msbList = []
@@ -169,7 +232,7 @@ def parseVarsOut(line):
     varlist = inner.split(",")
     for i in range(len(varlist)):
         v = varlist[i]
-        varlist[i] = v.strip()
+        varlist[i] = str(v.strip())
     return varlist
 
 
@@ -189,8 +252,8 @@ class Bench:
     def __init__(self, benchLines):
 
         #####
-        self.nodeInputs = list()
-        self.nodeOutputs = list()
+        self.inputs = list()
+        self.outputs = list()
         self.nodes = set()
 
         #####
@@ -208,23 +271,26 @@ class Bench:
         self.gateInputFaults: dict[str, dict] = {}
         self.gateOutputFaults: dict[str, bool] = {}
 
+        ####
+        self.controllabilities: dict[str,  list] = {}
+
         i = 0
         for line in benchLines:
             self.levelsToNodes[i] = set()
             if "INPUT" in line:
                 varlist = parseVarsOut(line)
                 assert len(varlist) == 1
-                varname = varlist[0]
-                self.nodeInputs.append(varname)
+                varname = str(varlist[0])
+                self.inputs.append(varname)
                 self.nodes.add(varname)
                 self.levelsToNodes.get(0).add(varname)
                 self.nodesToLevel[varname] = 0
             elif "OUTPUT" in line:
                 varlist = parseVarsOut(line)
                 assert len(varlist) == 1
-                varname = varlist[0]
+                varname = str(varlist[0])
                 self.nodes.add(varname)
-                self.nodeOutputs.append(varname)
+                self.outputs.append(varname)
             elif "=" in line:
                 post2 = line.find("=")
                 gateName = line[:post2]
@@ -249,6 +315,8 @@ class Bench:
                 self.nodes.add(gateName)
                 self.nodeGateTypes[gateName] = gate
             i = i + 1
+
+
 
         self.maxlvl = -1
         # Levelization
@@ -275,6 +343,34 @@ class Bench:
             if progress is False:
                 break
 
+        # assert all types
+        for nodeName in self.nodes:
+            assert isinstance(nodeName,str)
+        for nodeName in self.nodeGateInputs:
+            assert isinstance(nodeName,str)
+        for nodeName  in self.nodesToLevel:
+            assert isinstance(nodeName,str)
+
+        # controllability mapping
+        for i in range(self.maxlvl+1):
+            nodes = self.levelsToNodes[i]
+            if i == 0:
+                for node in nodes:
+                    self.controllabilities[node] = [0, 0]
+            else:
+                for node in nodes:
+                    inputControllabilitiesList = [list()] * len(self.nodeGateInputs[node])
+                    j = 0
+                    for gateInput in self.nodeGateInputs[node]:
+                        v1 = self.controllabilities[gateInput]
+                        inputControllabilitiesList[j] = v1
+                        j = j + 1
+                    #print("Evaluating for " + node)
+                    gateType = self.nodeGateTypes[node]
+                    eval = evalControllability(gateType, inputControllabilitiesList)
+                    assert eval is not None
+                    self.controllabilities[node] = eval
+
     def printFaultList(self):
         # Create entire fault list:
         print()
@@ -282,7 +378,7 @@ class Bench:
         for n in self.nodes:
             # print fautls of gates input
 
-            if n in self.nodeInputs:  # unless node is not an input
+            if n in self.inputs:  # unless node is not an input
                 continue  # then just skip
             for inp in self.nodeGateInputs[n]:
                 ti = str(n) + "-" + str(inp) + "-0" + ", " + str(n) + "-" + str(inp) + "-1" + ", "
@@ -297,7 +393,7 @@ class Bench:
         for n in self.nodes:
 
             # test fault at a input
-            if n in self.nodeInputs:  # unless node is not an input
+            if n in self.inputs:  # unless node is not an input
                 continue  # then just skip
             for inp in self.nodeGateInputs[n]:
                 self.addGateInputFault(n, inp, False)
@@ -321,7 +417,7 @@ class Bench:
         for n in self.nodes:
 
             # test fault at a input
-            if n in self.nodeInputs:  # unless node is not an input
+            if n in self.inputs:  # unless node is not an input
                 continue  # then just skip
             for inp in self.nodeGateInputs[n]:
                 b = self.gateInputFaultIsDetected(tv, n, inp, True)
@@ -350,8 +446,8 @@ class Bench:
         print(" Detects " + str(round(percentage_catch, 6)) + "% of all faults, " + str(catches) + "/" + str(tests))
 
     def printTV(self):
-        for i in range(len(self.nodeInputs)):
-            varname = self.nodeInputs[i]
+        for i in range(len(self.inputs)):
+            varname = self.inputs[i]
             if (self.nodeValues[varname] == True):
                 print("1", end="")
             else:
@@ -406,8 +502,8 @@ class Bench:
         return b
 
     def randomizeInputTV(self):
-        b = [False] * len(self.nodeInputs)
-        for i in range(len(self.nodeInputs)):
+        b = [False] * len(self.inputs)
+        for i in range(len(self.inputs)):
             b[i] = random.choice([True, False])
         return b
 
@@ -415,10 +511,10 @@ class Bench:
     # returns the circuit output
     def evaluate(self, tv_in):
         tv = tv_in[::-1]
-        bout = [False] * len(self.nodeOutputs)
+        bout = [False] * len(self.outputs)
         # assert len(tv) == len(self.nodeInputs)
-        for i in range(len(self.nodeInputs)):
-            varname = self.nodeInputs[i]
+        for i in range(len(self.inputs)):
+            varname = self.inputs[i]
             self.nodeValues[varname] = bool(tv[i])
         for i in range(1, self.maxlvl + 1):
             assignNow = self.levelsToNodes.get(i)
@@ -430,8 +526,8 @@ class Bench:
                 inputs = list(self.nodeGateInputs.get(varname))
                 eval = evalGate(gate, self.resolveInputs(varname, inputs))
                 self.nodeValues[varname] = eval
-        for i in range(len(self.nodeOutputs)):
-            varname = self.nodeOutputs[i]
+        for i in range(len(self.outputs)):
+            varname = self.outputs[i]
             bout[i] = self.nodeValues[varname]
         return bout
 
@@ -478,8 +574,8 @@ class Bench:
         print("")
 
         print("Input:")
-        for i in range(len(self.nodeInputs)):
-            varname = self.nodeInputs[i]
+        for i in range(len(self.inputs)):
+            varname = self.inputs[i]
             if (self.nodeValues[varname] == True):
                 print("1", end="")
             else:
@@ -488,8 +584,8 @@ class Bench:
 
         print("")
 
-        for i in range(len(self.nodeInputs)):
-            varname = self.nodeInputs[i]
+        for i in range(len(self.inputs)):
+            varname = self.inputs[i]
             print(str(varname) + " ", end="")
 
         print("")
@@ -503,11 +599,21 @@ class Bench:
                 assert a[i] == False
                 print("0", end="")
         print("")
-        for i in range(len(self.nodeOutputs)):
-            varname = self.nodeOutputs[i]
+        for i in range(len(self.outputs)):
+            varname = self.outputs[i]
             print(str(varname) + " ", end="")
         print("")
 
+    def printControlabities(self):
+        for i in range(self.maxlvl+1):
+            nodes = self.levelsToNodes[i]
+            print("L" + str(i))
+            for node in nodes:
+                c_n = self.controllabilities[node]
+                c0 = c_n[0]
+                c1 = c_n[1]
+                print(" " + node + " (" + str(c0) + ", " + str(c1) + "), ", end="")
+            print("\n", end="")
     def printResultWithIntermediates(self, tv):
         a = self.evaluate(tv)
 
@@ -534,8 +640,8 @@ class Bench:
         print("")
 
         print("Input:")
-        for i in range(len(self.nodeInputs)):
-            varname = self.nodeInputs[i]
+        for i in range(len(self.inputs)):
+            varname = self.inputs[i]
             if (self.nodeValues[varname] == True):
                 print("1", end="")
             else:
@@ -544,19 +650,19 @@ class Bench:
 
         print("")
 
-        for i in range(len(self.nodeInputs)):
-            varname = self.nodeInputs[i]
+        for i in range(len(self.inputs)):
+            varname = self.inputs[i]
             print(str(varname) + " ", end="")
 
         print("")
         print("Progression to output:")
-        for lvv in range(self.maxlvl+1):
+        for lvv in range(self.maxlvl + 1):
             print("-------->")
             print("Level " + str(lvv) + ":")
             for n in self.levelsToNodes[lvv]:
                 b = self.nodeValues[n]
                 if b:
-                    print(str(n)+ " 1")
+                    print(str(n) + " 1")
                 else:
                     print(str(n) + " 0")
 
@@ -571,7 +677,7 @@ class Bench:
                 assert a[i] == False
                 print("0", end="")
         print("")
-        for i in range(len(self.nodeOutputs)):
-            varname = self.nodeOutputs[i]
+        for i in range(len(self.outputs)):
+            varname = self.outputs[i]
             print(str(varname) + " ", end="")
         print("")
