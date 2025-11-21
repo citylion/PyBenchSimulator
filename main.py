@@ -1,5 +1,5 @@
 from benchlib import *
-file_path = "c7552.bench"
+file_path = "hw1.bench"
 
 
 benchLines = []
@@ -18,6 +18,7 @@ except Exception as e:
 
 b = Bench(benchLines)
 b.printControlabities()
+b.nMonteCarlo(1000)
 
 
 '''

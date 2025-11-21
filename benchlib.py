@@ -13,8 +13,10 @@ class Gate(Enum):
     BUFF = "BUFF"
     NONE = "NONE"  # should not happen
 
+
 line_limit = 150
 line_i = 0
+
 
 def limitedPrint(str):
     global line_i
@@ -132,6 +134,7 @@ def evalControllability(g, list):
     rtn = [c0, c1]
     assert rtn is not None
     return rtn
+
 
 def hexToBinList(hex):
     msbList = []
@@ -272,7 +275,7 @@ class Bench:
         self.gateOutputFaults: dict[str, bool] = {}
 
         ####
-        self.controllabilities: dict[str,  list] = {}
+        self.controllabilities: dict[str, list] = {}
 
         i = 0
         for line in benchLines:
@@ -316,8 +319,6 @@ class Bench:
                 self.nodeGateTypes[gateName] = gate
             i = i + 1
 
-
-
         self.maxlvl = -1
         # Levelization
         while True:
@@ -345,14 +346,14 @@ class Bench:
 
         # assert all types
         for nodeName in self.nodes:
-            assert isinstance(nodeName,str)
+            assert isinstance(nodeName, str)
         for nodeName in self.nodeGateInputs:
-            assert isinstance(nodeName,str)
-        for nodeName  in self.nodesToLevel:
-            assert isinstance(nodeName,str)
+            assert isinstance(nodeName, str)
+        for nodeName in self.nodesToLevel:
+            assert isinstance(nodeName, str)
 
         # controllability mapping
-        for i in range(self.maxlvl+1):
+        for i in range(self.maxlvl + 1):
             nodes = self.levelsToNodes[i]
             if i == 0:
                 for node in nodes:
@@ -365,7 +366,7 @@ class Bench:
                         v1 = self.controllabilities[gateInput]
                         inputControllabilitiesList[j] = v1
                         j = j + 1
-                    #print("Evaluating for " + node)
+                    # print("Evaluating for " + node)
                     gateType = self.nodeGateTypes[node]
                     eval = evalControllability(gateType, inputControllabilitiesList)
                     assert eval is not None
@@ -605,7 +606,7 @@ class Bench:
         print("")
 
     def printControlabities(self):
-        for i in range(self.maxlvl+1):
+        for i in range(self.maxlvl + 1):
             nodes = self.levelsToNodes[i]
             print("L" + str(i))
             for node in nodes:
@@ -614,6 +615,7 @@ class Bench:
                 c1 = c_n[1]
                 print(" " + node + " (" + str(c0) + ", " + str(c1) + "), ", end="")
             print("\n", end="")
+
     def printResultWithIntermediates(self, tv):
         a = self.evaluate(tv)
 
@@ -681,3 +683,29 @@ class Bench:
             varname = self.outputs[i]
             print(str(varname) + " ", end="")
         print("")
+
+    def nMonteCarlo(self, n):
+        #               v size 2 array of times 0,1
+        mc: dict[str, list] = {}
+        total_iterations = n #of times to simulate random tvs
+        for i in range(total_iterations):
+            tv = self.randomizeInputTV()
+            self.evaluate(tv)
+            for node in self.nodes:
+                if node not in mc:
+                    mc[node] = [0, 0]
+                valFromSim = self.nodeValues[node]
+                if valFromSim == True:
+                    mc[node][1] = mc[node][1] + 1
+                else:
+                    mc[node][0] = mc[node][0] + 1
+        #report results:
+        #Print by level
+        for i in range(self.maxlvl + 1):
+            nodes = self.levelsToNodes[i]
+            print("L" + str(i))
+            for node in nodes:
+                perc0 = round(100*mc[node][0] / total_iterations,2)
+                perc1 = round(100*mc[node][1] / total_iterations,2)
+                print(" " + node + " (" + str(perc0) + "%, " + str(perc1) + "%), ", end="")
+            print("\n", end="")
