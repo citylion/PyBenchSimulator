@@ -1,5 +1,5 @@
 from benchlib import *
-file_path = "hw1.bench"
+file_path = "p2.bench"
 
 
 benchLines = []
@@ -15,10 +15,14 @@ except FileNotFoundError:
 except Exception as e:
     print("Error: Exception as follows, " + str(e))
 
+fname = file_path.split(".")[0]
 
 b = Bench(benchLines)
 b.printControlabities()
 b.nMonteCarlo(1000)
+b.csvSCOAPvsMC(fname+"_scoap_mc")
+
+
 
 
 '''

@@ -1,5 +1,6 @@
 import random
 from enum import Enum
+import csv
 
 
 class Gate(Enum):
@@ -277,6 +278,9 @@ class Bench:
         ####
         self.controllabilities: dict[str, list] = {}
 
+        self.mc_ref = None
+        self.mc_sims = 0
+
         i = 0
         for line in benchLines:
             self.levelsToNodes[i] = set()
@@ -303,12 +307,13 @@ class Bench:
                 post2 = line.find(")")
 
                 i = post1
+
                 while i > 0:
-                    if line[i - 1] == ' ':
+                    if line[i - 1] == ' ' or line[i-1] == '=':
                         gateTypeStr = line[i:post1]
                         break;
                     i = i - 1
-
+                #gateTypeStr = gateTypeStr
                 gate = getGateType(gateTypeStr)
 
                 varlist = parseVarsOut(line)
@@ -357,7 +362,7 @@ class Bench:
             nodes = self.levelsToNodes[i]
             if i == 0:
                 for node in nodes:
-                    self.controllabilities[node] = [0, 0]
+                    self.controllabilities[node] = [1, 1]
             else:
                 for node in nodes:
                     inputControllabilitiesList = [list()] * len(self.nodeGateInputs[node])
@@ -709,3 +714,42 @@ class Bench:
                 perc1 = round(100*mc[node][1] / total_iterations,2)
                 print(" " + node + " (" + str(perc0) + "%, " + str(perc1) + "%), ", end="")
             print("\n", end="")
+        self.mc_ref = mc
+        self.mc_sims = total_iterations
+
+    def csvSCOAPvsMC(self,name):
+        #how many rows in csv?
+        #rows will be the amount of nodes
+        numRows = len(self.nodes)
+        numCol = 5
+        writePos = 0
+        data = [None] * (numRows+1) #but one extra row for headers
+        for i in range(len(data)):
+            data[i] = [None]*numCol
+
+        data[0] = ["Node","c(c0)","c(c1)","mc_0","mc_1"]
+        writePos=writePos+1
+        for i in range(self.maxlvl+1):
+            nodes = self.levelsToNodes[i]
+            for node in nodes:
+                #scoap values
+                c0 = self.controllabilities[node][0]
+                c1 = self.controllabilities[node][1]
+                #mc percentages
+                c0perc = 100 * self.mc_ref[node][0] / self.mc_sims
+                c1perc = 100 * self.mc_ref[node][1] / self.mc_sims
+                data[writePos][0] = str(node)
+                data[writePos][1] = str(c0)
+                data[writePos][2] = str(c1)
+                data[writePos][3] = str(c0perc) + "%"
+                data[writePos][4] = str(c1perc) + "%"
+                writePos= writePos+1
+
+        with open(name+'.csv', 'w', newline='') as csvfile:
+            writer = csv.writer(csvfile)
+            # Write the header row
+            writer.writerow(data[0])
+            # Write the data rows
+            writer.writerows(data[1:])
+
+        print("saved csv to " + name + ".csv")
